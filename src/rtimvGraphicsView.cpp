@@ -919,7 +919,7 @@ void rtimvGraphicsView::mousePressEvent(QMouseEvent *e)
 
 void rtimvGraphicsView::mouseReleaseEvent(QMouseEvent *e)
 {
-   if(e->button()  == Qt::MidButton)
+   if(e->button()  == Qt::MiddleButton)
    {
       mapCenterToScene(e->pos().x(), e->pos().y());
       emit centerChanged();
@@ -944,7 +944,7 @@ void rtimvGraphicsView::mouseDoubleClickEvent(QMouseEvent *e)
 
 void rtimvGraphicsView::wheelEvent(QWheelEvent *e)
 {
-   emit wheelMoved(e->delta());
+   emit wheelMoved(e->angleDelta().y());
 }
 
 

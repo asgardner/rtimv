@@ -128,7 +128,7 @@ int fitsImage::readImage()
       fstatus = 0;
       fits_close_file(fptr, &fstatus);
 
-      delete naxes;
+      delete[] naxes;
       return -1;
    }
    m_reported = false;
@@ -161,7 +161,7 @@ int fitsImage::readImage()
    inc[1] = 1;
    inc[2] = 1;
 
-   delete naxes;
+   delete[] naxes;
 
    int anynul;
    
