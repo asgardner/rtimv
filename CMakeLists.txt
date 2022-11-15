@@ -53,3 +53,6 @@ target_link_libraries(rtimview PUBLIC
     GSL::gsl GSL::gslcblas 
     ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY}
 )
+
+install(TARGETS rtimv DESTINATION lib)
+install(TARGETS rtimview DESTINATION bin)

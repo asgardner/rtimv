@@ -120,7 +120,7 @@
   <customwidget>
    <class>rtimvGraphicsView</class>
    <extends>QGraphicsView</extends>
-   <header>src/rtimvGraphicsView.hpp</header>
+   <header>rtimvGraphicsView.hpp</header>
    <slots>
     <signal>centerChanged()</signal>
     <signal>mouseCoordsChanged()</signal>
