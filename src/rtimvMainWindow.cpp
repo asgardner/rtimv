@@ -90,7 +90,7 @@ rtimvMainWindow::rtimvMainWindow( int argc,
    for (QObject *plugin : staticInstances)
    {
       static_cast<void>(plugin);
-      std::cerr << "loaded static plugins\n";
+      // std::cerr << "loaded static plugins\n";
    }
    
    QDir pluginsDir = QDir(QCoreApplication::applicationDirPath());
