@@ -21,7 +21,11 @@ add_library(rtimv
     src/StretchCircle.cpp
     src/StretchLine.cpp
 )
-target_include_directories(rtimv PRIVATE ${Qt5Widgets_INCLUDE_DIRS})
+target_include_directories(rtimv PRIVATE 
+    ${Qt5Widgets_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../src/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../xrif/src
+)
 target_compile_options(rtimv PUBLIC "-fPIC")
 
 add_executable(rtimview
@@ -37,7 +41,13 @@ add_executable(rtimview
     forms/imviewerControlPanel.ui
     forms/imviewerStats.ui 
 )
-target_include_directories(rtimview PRIVATE ${Qt5Widgets_INCLUDE_DIRS} src)
+target_include_directories(rtimview PRIVATE 
+    src 
+    ${Qt5Widgets_INCLUDE_DIRS} 
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../src/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../xrif/src
+    
+)
 target_compile_options(rtimview PUBLIC "-fPIC")
 target_link_directories(rtimview PUBLIC "$ENV{HOME}/vcpkg/installed/x64-linux/lib")
 target_link_libraries(rtimview PUBLIC 
