@@ -31,7 +31,8 @@ SOURCES += src/rtimvGraphicsView.cpp \
            src/StretchBox.cpp \
            src/StretchCircle.cpp \
            src/StretchLine.cpp
-                   
+
+
 
 #########################
 # installation 
@@ -43,7 +44,3 @@ INSTALLS += target
 unix:includefiles.path = /usr/local/include/rtimv
 includefiles.files = src/rtimvInterfaces.hpp src/rtimvGraphicsView.hpp src/StretchGraphicsItem.hpp src/StretchBox.hpp src/StretchCircle.hpp src/StretchLine.hpp
 INSTALLS += includefiles
-
-
-
-

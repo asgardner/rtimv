@@ -21,7 +21,7 @@ rtimvMainWindow::rtimvMainWindow( int argc,
    
    ui.setupUi(this);
    
-   nup =0;
+   m_northArrow =0;
    
    imcp = 0;
    pointerOverZoom = 4.;
@@ -37,11 +37,9 @@ rtimvMainWindow::rtimvMainWindow( int argc,
    
    m_colorBox = 0;
    
-   
    rightClickDragging = false;
 
    m_nullMouseCoords = true;
-   
    
    mindat(400);
    
@@ -55,18 +53,18 @@ rtimvMainWindow::rtimvMainWindow( int argc,
    imStats = 0;
    m_timer.start(m_timeout);
 
-   nup = m_qgs->addLine(QLineF(512,400, 512, 624), QColor("skyblue"));
-   nup_tip = m_qgs->addLine(QLineF(512,400, 536, 424), QColor("skyblue"));
-   nup->setTransformOriginPoint ( QPointF(512,512) );
-   nup_tip->setTransformOriginPoint ( QPointF(512,512) );
-   nup->setVisible(false);
-   nup_tip->setVisible(false);
+   m_northArrow = m_qgs->addLine(QLineF(512,400, 512, 624), QColor(RTIMV_DEF_GAGEFONTCOLOR));
+   m_northArrowTip = m_qgs->addLine(QLineF(512,400, 536, 424), QColor(RTIMV_DEF_GAGEFONTCOLOR));
+   m_northArrow->setTransformOriginPoint ( QPointF(512,512) );
+   m_northArrowTip->setTransformOriginPoint ( QPointF(512,512) );
+   m_northArrow->setVisible(false);
+   m_northArrowTip->setVisible(false);
    
-   QPen qp = nup->pen();
+   QPen qp = m_northArrow->pen();
    qp.setWidth(5);
 
-   nup->setPen(qp);
-   nup_tip->setPen(qp);
+   m_northArrow->setPen(qp);
+   m_northArrowTip->setPen(qp);
    
    m_lineHead = new QGraphicsEllipseItem;
    m_lineHead->setVisible(false);
@@ -90,7 +88,7 @@ rtimvMainWindow::rtimvMainWindow( int argc,
    for (QObject *plugin : staticInstances)
    {
       static_cast<void>(plugin);
-      // std::cerr << "loaded static plugins\n";
+      std::cerr << "loaded static plugins\n";
    }
    
    QDir pluginsDir = QDir(QCoreApplication::applicationDirPath());
@@ -171,6 +169,9 @@ void rtimvMainWindow::setupConfig()
    config.add("mzmq.server", "s", "mzmq.server", argType::Required, "mzmq", "server", false, "string", "The default server for milkzmq.  The default default is localhost.  This will be overridden by an image specific server specified in a key.");
    config.add("mzmq.port", "p", "mzmq.port", argType::Required, "mzmq", "port", false, "int", "The default port for milkzmq.  The default default is 5556.  This will be overridden by an image specific port specified in a key.");
    
+   config.add("north.enabled", "", "north.enabled", argType::Required, "north", "enabled", false, "bool", "Whether or not to enable the north arrow. Default is true.");
+   config.add("north.offset", "", "north.offset", argType::Required, "north", "offset", false, "float", "Offset in degrees c.c.w. to apply to the north angle. Default is 0.");
+   config.add("north.scale", "", "north.scale", argType::Required, "north", "scale", false, "float", "Scaling factor to apply to north angle to convert to degrees c.c.w. on the image.  Default is -1.");
 }
 
 void rtimvMainWindow::loadConfig()
@@ -241,6 +242,7 @@ void rtimvMainWindow::loadConfig()
    
    //Now load remaining options, respecting coded defaults.
    config(m_autoScale, "autoscale");
+   config(m_subtractDark, "darksub");
 
    bool nofpsgage = !m_showFPSGage;
    config(nofpsgage, "nofpsgage");
@@ -251,6 +253,10 @@ void rtimvMainWindow::loadConfig()
    
    config(m_showToolTipCoords, "mouse.pointerCoords");
    config(m_showStaticCoords, "mouse.staticCoords");
+
+   config(m_northArrowEnabled, "north.enabled");
+   config(m_northAngleOffset, "north.offset");
+   config(m_northAngleScale, "north.scale");
 
 }
 
@@ -343,26 +349,6 @@ void rtimvMainWindow::post_zoomLevel()
    if(imcp) imcp->ui.pointerView->setTransform(transform);
    change_center();
    
-   if(nup)
-   {
-      nup->setLine(ui.graphicsView->xCen(), ui.graphicsView->yCen()-.1*m_ny/m_zoomLevel, ui.graphicsView->xCen(), ui.graphicsView->yCen()+.1*m_ny/m_zoomLevel);
-      
-      nup->setTransformOriginPoint ( QPointF(ui.graphicsView->xCen(),ui.graphicsView->yCen()) );
-         
-      nup_tip->setLine(QLineF(ui.graphicsView->xCen(),ui.graphicsView->yCen()-.1*m_ny/m_zoomLevel, ui.graphicsView->xCen() + .02*m_nx/m_zoomLevel,ui.graphicsView->yCen()-.1*m_ny/m_zoomLevel + .012*m_ny/m_zoomLevel));
-      nup_tip->setTransformOriginPoint (  QPointF(ui.graphicsView->xCen(),ui.graphicsView->yCen()) );
-
-      QPen qp = nup->pen();
-   
-      float wid = 5/(m_zoomLevel*ScreenZoom);
-      if(wid > 3) wid = 3;
-      qp.setWidth(wid);
-
-      nup->setPen(qp);
-      nup_tip->setPen(qp);
-   }
-  
-  
    char zlstr[16];
    snprintf(zlstr,16, "%0.1fx", m_zoomLevel);
    ui.graphicsView->zoomText(zlstr);
@@ -374,8 +360,6 @@ void rtimvMainWindow::postChangeImdata()
 {
    //if(fps_ave > 1.0) ui.graphicsView->fpsGageText( fps_ave );
   
-   
-   
    if(saturated)
    {
       ui.graphicsView->warningText("Saturated!");
@@ -399,7 +383,9 @@ void rtimvMainWindow::postChangeImdata()
    if(m_objCenH) m_qpmi->stackBefore(m_objCenH);
    if(m_objCenV) m_qpmi->stackBefore(m_objCenV);
    if(m_lineHead) m_qpmi->stackBefore(m_lineHead);
-   
+   if(m_northArrow) m_qpmi->stackBefore(m_northArrow);
+   if(m_northArrowTip) m_qpmi->stackBefore(m_northArrowTip);
+
    if(imcp)
    {
       if(imcp->ViewViewMode == ViewViewEnabled)
@@ -423,7 +409,6 @@ void rtimvMainWindow::postChangeImdata()
    }
 
    
-
 }
 
 void rtimvMainWindow::launchControlPanel()
@@ -438,6 +423,63 @@ void rtimvMainWindow::launchControlPanel()
    imcp->show();
    
    imcp->activateWindow();
+}
+
+void rtimvMainWindow::centerNorthArrow()
+{
+   if(m_northArrow && m_northArrowTip)
+   {
+      m_northArrow->setLine(ui.graphicsView->xCen(), ui.graphicsView->yCen()-.1*m_ny/m_zoomLevel, ui.graphicsView->xCen(), ui.graphicsView->yCen()+.1*m_ny/m_zoomLevel);
+      
+      m_northArrow->setTransformOriginPoint ( QPointF(ui.graphicsView->xCen(),ui.graphicsView->yCen()) );
+         
+      m_northArrowTip->setLine(QLineF(ui.graphicsView->xCen(),ui.graphicsView->yCen()-.1*m_ny/m_zoomLevel, ui.graphicsView->xCen() + .02*m_nx/m_zoomLevel,ui.graphicsView->yCen()-.1*m_ny/m_zoomLevel + .012*m_ny/m_zoomLevel));
+      m_northArrowTip->setTransformOriginPoint (  QPointF(ui.graphicsView->xCen(),ui.graphicsView->yCen()) );
+
+      QPen qp = m_northArrow->pen();
+   
+      float wid = 5/(m_zoomLevel*ScreenZoom);
+      if(wid > 3) wid = 3;
+      qp.setWidth(wid);
+
+      m_northArrow->setPen(qp);
+      m_northArrowTip->setPen(qp);
+   }
+
+   updateNorthArrow();
+}
+
+void rtimvMainWindow::updateNorthArrow()
+{
+   if(m_northArrow && m_northArrowTip)
+   {
+      float ang = northAngle();
+      m_northArrow->setRotation(ang);
+      m_northArrowTip->setRotation(ang);
+   }
+}
+
+float rtimvMainWindow::northAngle()
+{
+   float north = 0;
+   if(m_dictionary.count("rtimv.north.angle") > 0)
+   {
+      m_dictionary["rtimv.north.angle"].getBlob((char *) &north, sizeof(float));
+      
+      north = -1*(m_northAngleOffset + m_northAngleScale*north); //negative because QT is c.w.
+   }
+
+   return north;
+} 
+
+void rtimvMainWindow::northAngleRaw(float north)
+{
+   m_dictionary["rtimv.north.angle"].setBlob((char *) &north, sizeof(float));
+}
+
+QGraphicsScene * rtimvMainWindow::get_qgs()
+{
+   return m_qgs;
 }
 
 void rtimvMainWindow::freezeRealTime()
@@ -488,7 +530,9 @@ void rtimvMainWindow::setPointerOverZoom(float poz)
 void rtimvMainWindow::change_center(bool movezoombox)
 {   
    ui.graphicsView->centerOn(ui.graphicsView->xCen(), ui.graphicsView->yCen());
-  
+   
+   centerNorthArrow();
+
    if(imcp)
    {
       
@@ -593,8 +637,6 @@ void rtimvMainWindow::nullMouseCoords()
 
       ui.graphicsView->hideMouseToolTip();
    }
-
-  
 }
 
 void rtimvMainWindow::updateMouseCoords()
@@ -650,7 +692,16 @@ void rtimvMainWindow::updateMouseCoords()
       {
          char valStr[32];
          char posStr[32];
-         snprintf(valStr, sizeof(valStr), "%0f", _pixel(this,  (int)(idx_y*m_nx) + (int)(idx_x)));
+         
+         if(fabs(val) < 1e-1)
+         {
+            snprintf(valStr, sizeof(valStr), "%0.04g", val);
+         }
+         else
+         {
+            snprintf(valStr, sizeof(valStr), "%0.02f", val);
+         }
+
          snprintf(posStr, sizeof(posStr), "%0.2f %0.2f", mx-0.5, m_qpmi->boundingRect().height() - my-0.5 );
 
          ui.graphicsView->showMouseToolTip(valStr, posStr, QPoint(ui.graphicsView->mouseViewX(),ui.graphicsView->mouseViewY()));
@@ -779,10 +830,14 @@ void rtimvMainWindow::updateAge()
       {
          ui.graphicsView->fpsGageText(m_images[0]->fpsEst());
       }
-      else
+      else if(age < 86400*10000) //only if age is reasonable
       {
          ui.graphicsView->fpsGageText(age, true);
-      } 
+      }
+      else  
+      {
+         ui.graphicsView->fpsGageText("");
+      }
    }
 
    for(size_t n=0;n<m_overlays.size(); ++n)
@@ -795,7 +850,10 @@ void rtimvMainWindow::updateAge()
       ui.graphicsView->loopText("Loop OPEN", "red");
    }
 
-
+   if(m_northArrowEnabled)
+   {
+      updateNorthArrow();
+   }
 }
 
 void rtimvMainWindow::updateNC()
@@ -894,7 +952,17 @@ void rtimvMainWindow::userItemMouseCoords( float mx,
       
    char valStr[32];
    char posStr[32];
-   snprintf(valStr, sizeof(valStr), "%0f", val);
+   
+   if(fabs(val) < 1e-1)
+   {
+      snprintf(valStr, sizeof(valStr), "%0.04g", val);
+   }
+   else
+   {
+      snprintf(valStr, sizeof(valStr), "%0.02f", val);
+   }
+
+
    snprintf(posStr, sizeof(posStr), "%0.2f %0.2f", mx-0.5, m_qpmi->boundingRect().height() - my-0.5 );
 
    std::string str = std::string(valStr) + "\n" + posStr;
@@ -911,7 +979,7 @@ void rtimvMainWindow::userItemMouseCoords( float mx,
 void rtimvMainWindow::userBoxItemMouseCoords(StretchBox * sb)
 {
    QRectF sbr = sb->sceneBoundingRect();
-   QPoint qr = ui.graphicsView->mapFromScene(QPointF(sbr.x()+0.5*sbr.width(), sbr.y() + 0.5*sbr.height()));
+   QPointF qr = QPointF(sbr.x()+0.5*sbr.width(),sbr.y()+0.5*sbr.height()); 
 
    m_userItemMouseViewX = qr.x();
    m_userItemMouseViewY = qr.y();
@@ -921,7 +989,7 @@ void rtimvMainWindow::userBoxItemMouseCoords(StretchBox * sb)
 void rtimvMainWindow::userCircleItemMouseCoords(StretchCircle * sc)
 {
    QRectF sbr = sc->sceneBoundingRect();
-   QPoint qr = ui.graphicsView->mapFromScene(QPointF(sbr.x()+0.5*sbr.width(), sbr.y() + 0.5*sbr.height()));
+   QPointF qr = QPointF(sbr.x()+0.5*sbr.width(),sbr.y()+0.5*sbr.height());
 
    m_userItemMouseViewX = qr.x();
    m_userItemMouseViewY = qr.y();
@@ -1350,8 +1418,6 @@ void rtimvMainWindow::userCircleMoved(StretchCircle * sc)
    userCircleItemSize(sc);
    userCircleItemMouseCoords(sc);
    userCircleItemCoords(sc);
-
-   
 }
 
 void rtimvMainWindow::userCircleMouseIn(StretchCircle * sc)
@@ -1427,22 +1493,23 @@ void rtimvMainWindow::userLineResized(StretchLine * sl)
 {
    userLineMoved(sl); //Move the text along with us.
    
+   float ang = fmod(sl->angle() -90 + northAngle(), 360.0);
+
+   if(ang < 0) ang += 360.0;
+   
    char tmp[256];
-   snprintf(tmp, 256, "%0.1f @ %0.1f", sl->length(), sl->angle());
+   snprintf(tmp, 256, "%0.1f @ %0.1f", sl->length(), ang);
    
    ui.graphicsView->m_userItemSize->setText(tmp);
 
    m_userItemXCen = sl->line().x1();
    m_userItemYCen = sl->line().y1();
 
-   //QRectF sbr = sl->sceneBoundingRect();
-   QPoint qr = ui.graphicsView->mapFromScene(QPointF(sl->line().x1(), sl->line().y1()));
+   QPointF qr = QPointF(sl->line().x1(), sl->line().y1());
 
    m_userItemMouseViewX = qr.x();
    m_userItemMouseViewY = qr.y();
    userItemMouseCoords(qr.x(), qr.y());
-
-   //userItemMouseCoords(m_userItemXCen, m_userItemYCen);
 }
 
 void rtimvMainWindow::userLineMoved(StretchLine * sl)
@@ -1457,7 +1524,7 @@ void rtimvMainWindow::userLineMoved(StretchLine * sl)
    m_userItemXCen = sl->line().x1();
    m_userItemYCen = sl->line().y1();
 
-   QPoint qr = ui.graphicsView->mapFromScene(QPointF(sl->line().x1(), sl->line().y1()));
+   QPointF qr = QPointF(sl->line().x1(), sl->line().y1()); 
 
    m_userItemMouseViewX = qr.x();
    m_userItemMouseViewY = qr.y();
@@ -1548,6 +1615,21 @@ void rtimvMainWindow::userLineDeSelected(StretchLine * sl)
    ui.graphicsView->m_userItemMouseCoords->setVisible(false);
    m_lineHead->setVisible(false);
    m_userItemSelected = false;
+}
+
+void rtimvMainWindow::savingState(bool ss)
+{
+   if(ss)
+   {
+      ui.graphicsView->saveBoxFontColor("lightgreen");
+      ui.graphicsView->m_saveBox->setText("S");
+   }
+   else
+   {
+      ui.graphicsView->saveBoxFontColor("red");
+      ui.graphicsView->m_saveBox->setText("X");
+
+   }
 }
 
 void rtimvMainWindow::post_setUserBoxActive(bool usba)
@@ -1812,19 +1894,26 @@ void rtimvMainWindow::toggleStatsBox()
 
 void rtimvMainWindow::toggleNorthArrow()
 {
-   if(!nup) return;
+   if(!m_northArrow) return;
    
-   if(nup->isVisible())
+   if(!m_northArrowEnabled)
    {
-      nup->setVisible(false);
-      nup_tip->setVisible(false);
+      m_northArrow->setVisible(false);
+      m_northArrowTip->setVisible(false);
+      return;
+   }
+
+   if(m_northArrow->isVisible())
+   {
+      m_northArrow->setVisible(false);
+      m_northArrowTip->setVisible(false);
       ui.graphicsView->zoomText("North Off");
       fontLuminance(ui.graphicsView->m_zoomText);
    }
    else
    {
-      nup->setVisible(true);
-      nup_tip->setVisible(true);
+      m_northArrow->setVisible(true);
+      m_northArrowTip->setVisible(true);
       ui.graphicsView->zoomText("North On");
       fontLuminance(ui.graphicsView->m_zoomText);
    }
@@ -2144,6 +2233,7 @@ void rtimvMainWindow::fontLuminance()
       if(ui.graphicsView->m_statusText[n]->toPlainText().size() > 0) fontLuminance(ui.graphicsView->m_statusText[n]);
    }
    
+   fontLuminance(ui.graphicsView->m_saveBox);
    
    return;
    

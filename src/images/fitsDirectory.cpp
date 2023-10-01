@@ -1,79 +1,77 @@
-#include "fitsImage.hpp"
+#include "fitsDirectory.hpp"
 
 #include <iostream>
 #include <mx/ioutils/fileUtils.hpp>
 #include <unistd.h>
 #include <sys/inotify.h>
 
-fitsImage::fitsImage()
+fitsDirectory::fitsDirectory()
 {
    connect(&m_timer, SIGNAL(timeout()), this, SLOT(imageTimerout()));
 
    m_notifyfd = inotify_init1(IN_NONBLOCK);
    if(m_notifyfd < 0)
    {
-      perror("rtimv: fitsImage: error intializing inotify");
+      perror("rtimv: fitsDirectory: error intializing inotify");
       std::cerr << "Will not be able to watch file for changes\n";
    }
 }
 
-int fitsImage::imageKey( const std::string & sn )
+int fitsDirectory::imageKey( const std::string & sn )
 {
-   m_imagePath = sn;
-   
-   if( m_imagePath.find(".fits") == std::string::npos )
-   {
-      std::cerr << m_imagePath << " does not end in '.fits'.\n";
-      return -1;
-   }
-   
+   m_dirPath = sn;
 
    imageTimerout();
    
    return 0;
 }
 
-std::string fitsImage::imageKey()
+std::string fitsDirectory::imageKey()
 {
-   return m_imagePath;
+   return m_dirPath;
 }
 
-std::string fitsImage::imageName()
+std::string fitsDirectory::imageName()
 {
-   return mx::ioutils::pathStem(m_imagePath);
+   if(m_fileList.size() == 0)
+   {
+      return "";
+   }
+
+   return mx::ioutils::pathStem(m_fileList[m_currImage]);
 }
 
-void fitsImage::imageTimeout(int to)
+void fitsDirectory::imageTimeout(int to)
 {
    m_imageTimeout = to;
 }
 
-int fitsImage::imageTimeout()
+int fitsDirectory::imageTimeout()
 {
    return m_imageTimeout;
 }
 
-void fitsImage::timeout(int to)
+void fitsDirectory::timeout(int to)
 {
    m_timeout = to;
 }
 
-uint32_t fitsImage::nx()
+uint32_t fitsDirectory::nx()
 { 
    return m_nx; 
 }
    
-uint32_t fitsImage::ny()
+uint32_t fitsDirectory::ny()
 { 
    return m_ny;
 }
    
-double fitsImage::imageTime()
+double fitsDirectory::imageTime()
 {
    return m_lastImageTime;
 }
    
-void fitsImage::imageTimerout()
+void fitsDirectory::imageTimerout()
 {
    m_timer.stop();
    imConnect();
@@ -84,18 +82,20 @@ void fitsImage::imageTimerout()
    }
 }
 
-int fitsImage::readImage()
+int fitsDirectory::readImage(size_t imno)
 {
+   if(imno >= m_fileList.size()) return -1;
+
    ///The cfitsio data structure
    fitsfile * fptr {nullptr};
    
    int fstatus = 0;
 
-   fits_open_file(&fptr, m_imagePath.c_str(), READONLY, &fstatus);
+   fits_open_file(&fptr, m_fileList[imno].c_str(), READONLY, &fstatus);
 
    if (fstatus)
    {
-      if(!m_reported) std::cerr << "rtimv: " << m_imagePath << " not found.\n";
+      if(!m_reported) std::cerr << "rtimv: " << m_fileList[imno] << " not found.\n";
       m_reported = true;
       return -1;
    }
@@ -107,7 +107,7 @@ int fitsImage::readImage()
    fits_get_img_dim(fptr, &naxis, &fstatus);
    if (fstatus)
    {
-      if(!m_reported) std::cerr << "rtimv: error getting number of axes in file " << m_imagePath << "\n";
+      if(!m_reported) std::cerr << "rtimv: error getting number of axes in file " << m_fileList[imno] << "\n";
       m_reported = true;
 
       fstatus = 0;
@@ -122,7 +122,7 @@ int fitsImage::readImage()
    fits_get_img_size(fptr, naxis, naxes, &fstatus);
    if (fstatus)
    {
-      if(!m_reported) std::cerr << "rtimv: error getting dimensions in file " << m_imagePath << "\n";
+      if(!m_reported) std::cerr << "rtimv: error getting dimensions in file " << m_fileList[imno] << "\n";
       m_reported = true;
 
       fstatus = 0;
@@ -170,7 +170,7 @@ int fitsImage::readImage()
    
    if (fstatus)
    {
-      if(!m_reported) std::cerr << "rtimv: error reading data from " << m_imagePath << "\n";
+      if(!m_reported) std::cerr << "rtimv: error reading data from " << m_fileList[imno] << "\n";
       m_reported = true;
 
       fstatus = 0;
@@ -186,7 +186,7 @@ int fitsImage::readImage()
 
    if (fstatus)
    {
-      if(!m_reported) std::cerr << "rtimv: error closing file " << m_imagePath << "\n";
+      if(!m_reported) std::cerr << "rtimv: error closing file " << m_fileList[imno] << "\n";
       m_reported = true;
 
       fstatus = 0;
@@ -199,15 +199,19 @@ int fitsImage::readImage()
    return 0;
 }
 
-void fitsImage::imConnect()
+void fitsDirectory::imConnect()
 {
    m_imageFound = 0;
    m_imageUpdated = false;
    
-   if(readImage() < 0)
+   m_fileList = mx::ioutils::getFileNames(m_dirPath, "", "", ".fits");
+
+   if(m_fileList.size() == 0)
    {
       return;
    }
+
+   m_currImage = 0;
 
    m_imageFound = 1;
    
@@ -217,61 +221,63 @@ void fitsImage::imConnect()
       return;
    }
    
-   m_notifywd = inotify_add_watch(m_notifyfd, m_imagePath.c_str(), IN_CLOSE_WRITE);
+   m_notifywd = inotify_add_watch(m_notifyfd, m_dirPath.c_str(), IN_CREATE | IN_DELETE );
 
    if(m_notifywd < 0)
    {
-      perror("rtimv: fitsImage: error adding inotify watch");
+      perror("rtimv: fitsDirectory: error adding inotify watch");
    }
 
    emit connected();
 }
 
-int fitsImage::update()
+int fitsDirectory::update()
 {   
    if(!m_imageFound) return RTIMVIMAGE_NOUPDATE;
 
-   //First time through after connect
-   if(!m_imageUpdated)  
-   {
-      m_imageUpdated = true;
-         
-      return RTIMVIMAGE_IMUPDATE;
-   }
 
    //Read inotify to see if it changed.
-   
-   ssize_t len;
-   
-   if(m_notifyfd < 0 ) return RTIMVIMAGE_NOUPDATE;
 
-   len = read(m_notifyfd, m_notify_buf, sizeof(m_notify_buf));
-   if (len == -1 && errno != EAGAIN) 
+   ssize_t len;
+
+   if(m_notifyfd >= 0 )
    {
-      perror("rtimv: fitsImage: error reading inotify");
+      //Check if the directory changed
+      len = read(m_notifyfd, m_notify_buf, sizeof(m_notify_buf));
+      if (len == -1 && errno != EAGAIN)
+      {
+         perror("rtimv: fitsDirectory: error reading inotify");
+         detach();
+         return RTIMVIMAGE_NOUPDATE;
+      }
+
+      if (len > 0)
+      {
+         //Handle change in directory, but this could be a lot smarter than just starting over
+         detach();
+         return RTIMVIMAGE_NOUPDATE;
+      }
+   }
+   //No change in directory, just keep playing.
+
+   if(m_fileList.size() == 1) return RTIMVIMAGE_NOUPDATE;
+
+   if(readImage(m_currImage) < 0)
+   {
+      //this likely means we need to re-read the directory list
       detach();
       return RTIMVIMAGE_NOUPDATE;
    }
 
-   if (len <= 0)
-   {
-      return RTIMVIMAGE_NOUPDATE;
-   }
-   else
-   {
-      if(readImage() < 0)
-      {
-         detach();
-         return RTIMVIMAGE_NOUPDATE;
-      };
 
-      m_notifywd = inotify_add_watch(m_notifyfd, m_imagePath.c_str(), IN_CLOSE_WRITE);
+   ++m_currImage;
+   if(m_currImage >= m_fileList.size()) m_currImage =0;
 
-      return RTIMVIMAGE_IMUPDATE;
-   }
+   return RTIMVIMAGE_IMUPDATE;
+
 }
 
-void fitsImage::detach()
+void fitsDirectory::detach()
 {  
    if(m_data)
    {
@@ -287,19 +293,19 @@ void fitsImage::detach()
    return;
 }
 
-bool fitsImage::valid()
+bool fitsDirectory::valid()
 {
    if(m_imageFound && m_data) return true;
    
    return false;
 }
 
-void fitsImage::update_fps()
+void fitsDirectory::update_fps()
 {
 
 }
 
-float fitsImage::pixel(size_t n)
+float fitsDirectory::pixel(size_t n)
 {
    return pixget(m_data, n);
 }

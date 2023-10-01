@@ -1,8 +1,11 @@
 
 #include "rtimvBase.hpp"
 
-#include "images/shmimImage.hpp"
 #include "images/fitsImage.hpp"
+#ifdef RTIMV_MILK
+#include "images/shmimImage.hpp"
+#endif
+#include "images/fitsDirectory.hpp"
 #include "images/mzmqImage.hpp"
 
 rtimvBase * globalIMV;
@@ -46,10 +49,24 @@ void rtimvBase::startup( const std::vector<std::string> & shkeys )
                    shkeys[i].rfind(".FITS") == shkeys[i].size()-5) isFits = true;
             }
              
+            bool isDirectory = false;
+            if(!isFits)
+            {
+               if(shkeys[i][shkeys[i].size()-1] == '/')
+               {
+                  isDirectory = true;
+               }
+            }
+
             if(isFits)
             {
                fitsImage * fi = new fitsImage;
                m_images[i] = (rtimvImage *) fi;
+            }
+            else if(isDirectory)
+            {
+               fitsDirectory * fd = new fitsDirectory;
+               m_images[i] = (rtimvImage *) fd;
             }
             else if(shkeys[i].find('@') != std::string::npos || shkeys[i].find(':') != std::string::npos || m_mzmqAlways == true)
             {
@@ -64,8 +81,12 @@ void rtimvBase::startup( const std::vector<std::string> & shkeys )
             }
             else
             {
-               shmimImage * si = new shmimImage;
-               m_images[i] = (rtimvImage *) si;
+               #ifdef RTIMV_MILK
+                  shmimImage * si = new shmimImage;
+                  m_images[i] = (rtimvImage *) si;
+               #else
+                  qFatal("Unrecognized image key format");
+               #endif
             }
             
             m_images[i]->imageKey(shkeys[i]); // Set the key

@@ -20,13 +20,6 @@ QT += widgets
 
 MAKEFILE = makefile.rtimv
 
-#MILK include path
-unix::INCLUDEPATH += /usr/local/milk/include 
-unix::LIBPATH += /usr/local/milk/lib/
-
-#EIGEN include path 
-unix::INCLUDEPATH += /usr/local/include/eigen3/
-
 # Input
 HEADERS += src/rtimvGraphicsView.hpp \
            src/rtimvBase.hpp \
@@ -38,6 +31,7 @@ HEADERS += src/rtimvGraphicsView.hpp \
            src/colorMaps.hpp \
            src/images/shmimImage.hpp \
            src/images/fitsImage.hpp \
+           src/images/fitsDirectory.hpp \
            src/images/mzmqImage.hpp \
            src/images/pixaccess.hpp \
            src/images/ImageStruct.hpp 
@@ -49,18 +43,43 @@ SOURCES += src/rtimvBase.cpp \
            src/rtimvStats.cpp \
            src/images/shmimImage.cpp \
            src/images/fitsImage.cpp \
+           src/images/fitsDirectory.cpp \
            src/images/mzmqImage.cpp
-           
+
 FORMS += forms/rtimvMainWindow.ui \
          forms/imviewerControlPanel.ui \
-         forms/imviewerStats.ui 
-           
-LIBS += -lImageStreamIO
-LIBS += -lcfitsio
-LIBS += -lrtimv
-LIBS += -lmxlib 
-LIBS += -lzmq
+         forms/imviewerStats.ui
+
+unix:!macx {
+    $$system(which milk, blob, which_milk_exit_code)
+    equals(which_milk_exit_code, 0) {
+        LIBS += -lImageStreamIO
+        DEFINES += RTIMV_MILK
+    }
+}
+
+#MILK include path
+unix::INCLUDEPATH += /usr/local/milk/include 
+unix::LIBPATH += /usr/local/milk/lib/
+
+
+CONFIG += link_pkgconfig
+
+#CFITSIO
+PKGCONFIG += cfitsio 
+
+#EIGEN 
+PKGCONFIG += eigen3
+
+packagesExist(libzmq) {
+   PKGCONFIG += libzmq
+} else {
+   LIBS += -lzmq 
+}
+
+LIBS += -lmxlib
 LIBS += -lxrif
+LIBS += -L./bin -lrtimv
 
 RESOURCES += res/imviewer.qrc
 
@@ -70,11 +89,3 @@ RESOURCES += res/imviewer.qrc
 
 unix:target.path = /usr/local/bin
 INSTALLS += target
-
-# unix:includefiles.path = /usr/local/include/rtimv
-# includefiles.files = src/rtimvInterfaces.hpp src/rtimvGraphicsView.hpp
-# INSTALLS += includefiles
-
-
-
-

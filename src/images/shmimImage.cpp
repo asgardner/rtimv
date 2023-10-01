@@ -4,14 +4,7 @@
 
 #include <iostream>
 
-/*errno_t isio_err_to_ignore = 0;
-errno_t new_printError( const char *file, const char *func, int line, errno_t code, char *errmessage )
-{
-   if(code == isio_err_to_ignore) return IMAGESTREAMIO_SUCCESS;
-   
-   std::cerr << "ImageStreamIO Error:\n\tFile: " << file << "\n\tLine: " << line << "\n\tFunc: " << func << "\n\tMsg:  " << errmessage << std::endl; 
-   return IMAGESTREAMIO_SUCCESS;
-}*/
+#ifdef RTIMV_MILK
 
 shmimImage::shmimImage()
 {
@@ -229,7 +222,7 @@ int shmimImage::update()
    if(cnt0 != m_lastCnt0) //Only redraw if it's actually a new image.
    {
       m_data = ((char *) (m_image.array.raw)) + curr_image*snx*sny*m_typeSize;
-      m_imageTime = m_image.md->atime.tv_sec + ((double) m_image.md->atime.tv_nsec)/1e9;
+      m_imageTime = m_image.md->writetime.tv_sec + ((double) m_image.md->writetime.tv_nsec)/1e9;
       
       m_lastCnt0 = cnt0;
       m_age_counter = 0;
@@ -332,3 +325,4 @@ float shmimImage::fpsEst()
 }
 
 
+#endif // RTIMV_MILK

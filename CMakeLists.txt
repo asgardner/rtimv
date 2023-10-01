@@ -10,6 +10,7 @@ find_package(ZeroMQ CONFIG REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 find_package(GSL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem)
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
@@ -37,6 +38,8 @@ add_executable(rtimview
     src/images/shmimImage.cpp
     src/images/fitsImage.cpp
     src/images/mzmqImage.cpp
+    src/images/fitsDirectory.cpp
+    src/images/shmimImage.cpp
     forms/rtimvMainWindow.ui
     forms/imviewerControlPanel.ui
     forms/imviewerStats.ui 
@@ -48,7 +51,7 @@ target_include_directories(rtimview PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../xrif/src
     
 )
-target_compile_options(rtimview PUBLIC "-fPIC")
+target_compile_options(rtimview PUBLIC "-DRTIMV_MILK")
 target_link_directories(rtimview PUBLIC "$ENV{HOME}/vcpkg/installed/x64-linux/lib")
 target_link_libraries(rtimview PUBLIC 
     libzmq 
